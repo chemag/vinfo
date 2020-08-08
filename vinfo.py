@@ -52,6 +52,10 @@ def run(command, options, **kwargs):
     return returncode, out, err
 
 
+class InvalidCommand(Exception):
+    pass
+
+
 def parse_file(infile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
@@ -60,10 +64,15 @@ def parse_file(infile, options):
     frame_list = get_frames_information(infile, options)
     # 2. get QP information from qpextract (hevc-only so far)
     if streams_list[0]['codec_name'] == 'hevc':
-        qp_list = get_qpextract_information(infile, options)
-        # 3. zip information together
-        frame_list = [{**ffprobe_info, **qp_info} for ffprobe_info, qp_info in
-                      zip(frame_list, qp_list)]
+        try:
+            qp_list = get_qpextract_information(infile, options)
+            # 3. zip information together
+            frame_list = [{**ffprobe_info, **qp_info}
+                          for ffprobe_info, qp_info in
+                          zip(frame_list, qp_list)]
+        except InvalidCommand:
+            print('warning: could not run qpextract in %s' % infile)
+            pass
     # 4. dump all information together as frames
     output_file = '%s.%s.csv' % (options.infile, 'frames')
     with open(output_file, 'w') as f:
@@ -190,9 +199,21 @@ def parse_ffprobe_output(out, label, debug):
 def get_qpextract_information(infile, options):
     command = 'qpextract %s' % infile
     returncode, out, err = run(command, options)
-    assert returncode == 0, 'error running "%s"' % command
+    if returncode != 0:
+        raise InvalidCommand('error running "%s"' % command)
     # parse the output
     return parse_qpextract_per_frame_info(out, options)
+
+
+def get_qpavg(qpmin, qpmax, qphisto):
+    total_qp = 0
+    total_values = 0
+    qp = int(qpmin)
+    for qp_num in qphisto:
+        total_qp += (int(qp_num) * qp)
+        total_values += int(qp_num)
+        qp += 1
+    return 1.0 * total_qp / total_values
 
 
 def parse_qpextract_per_frame_info(out, options):
@@ -214,6 +235,8 @@ def parse_qpextract_per_frame_info(out, options):
             'frame_number': match.group('frame_number'),
             'qpmin': match.group('qpmin'),
             'qpmax': match.group('qpmax'),
+            'qpavg': get_qpavg(match.group('qpmin'), match.group('qpmax'),
+                               match.group('qphisto').split(' ')),
             'qphisto': ':'.join(match.group('qphisto').split(' ')),
         }
         frame_list.append(frame_info)
