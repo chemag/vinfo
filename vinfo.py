@@ -56,9 +56,10 @@ def parse_file(infile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
     # 1. get video information from ffprobe
-    ffprobe_list = get_video_information(infile, options)
+    ffprobe_list = get_frames_information(infile, options)
+
     # 2. get QP information from qpextract
-    qp_list = get_qpextract_informatio(infile, options)
+    qp_list = get_qpextract_information(infile, options)
     # 3. zip information together
     frame_list = [{**ffprobe_info, **qp_info} for ffprobe_info, qp_info in
                   zip(ffprobe_list, qp_list)]
@@ -131,39 +132,52 @@ def aggregate_list_by_frame_number(in_list, field, period):
 
 
 # get video information
-def get_video_information(infile, options):
+def get_frames_information(infile, options):
     command = 'ffprobe -select_streams %s -show_frames %s' % (
         options.stream_id, infile)
     returncode, out, err = run(command, options)
     assert returncode == 0, 'error running "%s"' % command
     # parse the output
-    return parse_ffprobe_per_frame_info(out, options)
+    return parse_ffprobe_per_frame_info(out, options.debug)
 
 
-def parse_ffprobe_per_frame_info(out, options):
-    frame_list = []
-    frame_info = {}
+def parse_ffprobe_per_frame_info(out, debug):
+    frame_list = parse_ffprobe_output(out, 'FRAME', debug)
+    # add frame numbers
     frame_number = 0
+    new_frame_list = []
+    for frame_info in frame_list:
+        new_frame_info = {
+            'frame_number': frame_number,
+        }
+        new_frame_info.update(frame_info)
+        new_frame_list.append(new_frame_info)
+        frame_number += 1
+    return new_frame_list
+
+
+def parse_ffprobe_output(out, label, debug):
+    item_list = []
+    item_info = {}
+    start_item = '[%s]' % label
+    end_item = '[/%s]' % label
     for line in out.splitlines():
         line = line.decode('ascii').strip()
-        if line == '[FRAME]':
-            frame_info = {
-                'frame_number': frame_number,
-            }
-        elif line == '[/FRAME]':
-            frame_list.append(frame_info)
-            frame_number += 1
+        if line == start_item:
+            item_info = {}
+        elif line == end_item:
+            item_list.append(item_info)
         elif '=' in line:
             key, value = line.split('=', 1)
-            frame_info[key] = value
+            item_info[key] = value
         else:
-            if options.debug > 0:
+            if debug > 0:
                 print('warning: unknown line ("%s")' % line)
-    return frame_list
+    return item_list
 
 
 # get QP information
-def get_qpextract_informatio(infile, options):
+def get_qpextract_information(infile, options):
     command = 'qpextract %s' % infile
     returncode, out, err = run(command, options)
     assert returncode == 0, 'error running "%s"' % command
