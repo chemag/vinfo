@@ -56,13 +56,14 @@ def parse_file(infile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
     # 1. get video information from ffprobe
-    ffprobe_list = get_frames_information(infile, options)
-
-    # 2. get QP information from qpextract
-    qp_list = get_qpextract_information(infile, options)
-    # 3. zip information together
-    frame_list = [{**ffprobe_info, **qp_info} for ffprobe_info, qp_info in
-                  zip(ffprobe_list, qp_list)]
+    streams_list = get_streams_information(infile, options)
+    frame_list = get_frames_information(infile, options)
+    # 2. get QP information from qpextract (hevc-only so far)
+    if streams_list[0]['codec_name'] == 'hevc':
+        qp_list = get_qpextract_information(infile, options)
+        # 3. zip information together
+        frame_list = [{**ffprobe_info, **qp_info} for ffprobe_info, qp_info in
+                      zip(frame_list, qp_list)]
     # 4. dump all information together as frames
     output_file = '%s.%s.csv' % (options.infile, 'frames')
     with open(output_file, 'w') as f:
@@ -132,6 +133,15 @@ def aggregate_list_by_frame_number(in_list, field, period):
 
 
 # get video information
+def get_streams_information(infile, options):
+    command = 'ffprobe -select_streams %s -show_streams %s' % (
+        options.stream_id, infile)
+    returncode, out, err = run(command, options)
+    assert returncode == 0, 'error running "%s"' % command
+    # parse the output
+    return parse_ffprobe_output(out, 'STREAM', options.debug)
+
+
 def get_frames_information(infile, options):
     command = 'ffprobe -select_streams %s -show_frames %s' % (
         options.stream_id, infile)
