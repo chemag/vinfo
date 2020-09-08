@@ -66,10 +66,14 @@ def parse_file(infile, options):
     if streams_list[0]['codec_name'] == 'hevc':
         try:
             qp_list = get_qpextract_information(infile, options)
-            # 3. zip information together
-            frame_list = [{**ffprobe_info, **qp_info}
-                          for ffprobe_info, qp_info in
-                          zip(frame_list, qp_list)]
+            if not qp_list:
+                # qpextract is very picky (only accepts .265 files)
+                0
+            else:
+                # 3. zip information together
+                frame_list = [{**ffprobe_info, **qp_info}
+                              for ffprobe_info, qp_info in
+                              zip(frame_list, qp_list)]
         except InvalidCommand:
             print('warning: could not run qpextract in %s' % infile)
             pass
