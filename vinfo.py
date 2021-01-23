@@ -11,6 +11,7 @@ qpextract, etc. ).
 """
 
 import argparse
+from collections import defaultdict
 import os
 import re
 import subprocess
@@ -80,12 +81,21 @@ def parse_file(infile, options):
     # 4. dump all information together as frames
     output_file = '%s.%s.csv' % (options.infile, 'frames')
     with open(output_file, 'w') as f:
+        # get all the possible keys
         key_list = list(frame_list[0].keys())
+        for frame_info in frame_list:
+            for key in frame_info:
+                if key not in key_list:
+                    key_list.append(key)
+        # write the header
         header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
         f.write(header_format % tuple(key_list))
-        line_format = ','.join(['%s'] * len(key_list)) + '\n'
+        # write the line format
+        line_format = '{' + '},{'.join(key_list) + '}\n'
+        # write all the lines
         for frame_info in frame_list:
-            f.write(line_format % tuple(frame_info.values()))
+            d = defaultdict(str, **frame_info)
+            f.write(line_format.format_map(d))
     # 5. dump all information aggregated by time
     time_frame_list = aggregate_list_by_frame_number(
         frame_list, 'frame_number', options.period_frames)
