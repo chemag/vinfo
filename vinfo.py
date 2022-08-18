@@ -5,15 +5,12 @@
 vinfo.py parses a video file, and dumps per-frame and per-second
 information about it.
 
-Implemented as a script around a few other CLI tools (ffprobe,
-qpextract, etc. ).
-
+Implemented as a script around a few other CLI tools (ffprobe).
 """
 
 import argparse
 from collections import defaultdict
 import os
-import re
 import subprocess
 import sys
 
@@ -21,7 +18,6 @@ FUNC_CHOICES = {
     'help': 'show help options',
     'frames': 'run frame analysis',
     'time': 'run frame analysis',
-    'qp': 'run qp analysis',
 }
 
 
@@ -70,30 +66,11 @@ class InvalidCommand(Exception):
 def parse_file(infile, outfile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
-    # 1. get stream information from ffprobe
-    streams_list = get_streams_information(infile, options)
-
-    # 2. get per-frame information from ffprobe
-    frame_list = get_frames_information(infile, options)
-
-    # 3. get QP information from qpextract (hevc-only so far)
-    if streams_list[0]['codec_name'] == 'hevc':
-        try:
-            qp_list = get_qpextract_information(infile, options)
-            if not qp_list:
-                # qpextract is very picky (only accepts .265 files)
-                0
-            else:
-                # zip information together
-                frame_list = [{**ffprobe_info, **qp_info}
-                              for ffprobe_info, qp_info in
-                              zip(frame_list, qp_list)]
-        except InvalidCommand:
-            print('warning: could not run qpextract in %s' % infile)
-            pass
 
     if options.func == 'frames':
-        # 4. dump all information together as frames
+        # 1. get per-frame information from ffprobe
+        frame_list = get_frames_information(infile, options)
+        # 2. dump all information together as frames
         with open(outfile, 'w') as f:
             # get all the possible keys
             key_list = list(frame_list[0].keys())
@@ -112,7 +89,9 @@ def parse_file(infile, outfile, options):
                 f.write(line_format.format_map(d))
 
     if options.func == 'time':
-        # 4. dump all information aggregated by time
+        # 1. get per-frame information from ffprobe
+        frame_list = get_frames_information(infile, options)
+        # 2. dump all information aggregated by time
         time_frame_list = aggregate_list_by_frame_number(
             frame_list, 'frame_number', options.period_frames)
         with open(outfile, 'w') as f:
@@ -222,54 +201,6 @@ def parse_ffprobe_output(out, label, debug):
             if debug > 0:
                 print('warning: unknown line ("%s")' % line)
     return item_list
-
-
-# get QP information
-def get_qpextract_information(infile, options):
-    command = 'qpextract %s' % infile
-    returncode, out, err = run(command, options)
-    if returncode != 0:
-        raise InvalidCommand('error running "%s"' % command)
-    # parse the output
-    return parse_qpextract_per_frame_info(out, options)
-
-
-def get_qpavg(qpmin, qpmax, qphisto):
-    total_qp = 0
-    total_values = 0
-    qp = int(qpmin)
-    for qp_num in qphisto:
-        total_qp += (int(qp_num) * qp)
-        total_values += int(qp_num)
-        qp += 1
-    return 1.0 * total_qp / total_values
-
-
-def parse_qpextract_per_frame_info(out, options):
-    frame_list = []
-    # example: 'id: 0 qp_distro[26:35] { 11 21 25 89 73 70 243 136 170 3171 }'
-    qpextract_pattern = (
-        r'id: (?P<frame_number>\d+) '
-        r'qp_distro\[(?P<qpmin>\d+):(?P<qpmax>\d+)\] '
-        r'{ (?P<qphisto>[\d ]+) }'
-    )
-    for line in out.splitlines():
-        line = line.decode('ascii').strip()
-        match = re.search(qpextract_pattern, line)
-        if not match:
-            if options.debug > 0:
-                print('warning: invalid line ("%s")' % line)
-            continue
-        frame_info = {
-            'frame_number': match.group('frame_number'),
-            'qpmin': match.group('qpmin'),
-            'qpmax': match.group('qpmax'),
-            'qpavg': get_qpavg(match.group('qpmin'), match.group('qpmax'),
-                               match.group('qphisto').split(' ')),
-            'qphisto': ':'.join(match.group('qphisto').split(' ')),
-        }
-        frame_list.append(frame_info)
-    return frame_list
 
 
 def get_options(argv):
