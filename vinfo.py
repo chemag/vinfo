@@ -32,6 +32,7 @@ default_values = {
     'period_frames': 30,
     'func': 'help',
     'infile': None,
+    'outfile': None,
 }
 
 
@@ -66,7 +67,7 @@ class InvalidCommand(Exception):
     pass
 
 
-def parse_file(infile, options):
+def parse_file(infile, outfile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
     # 1. get stream information from ffprobe
@@ -93,8 +94,7 @@ def parse_file(infile, options):
 
     if options.func == 'frames':
         # 4. dump all information together as frames
-        output_file = '%s.%s.csv' % (options.infile, 'frames')
-        with open(output_file, 'w') as f:
+        with open(outfile, 'w') as f:
             # get all the possible keys
             key_list = list(frame_list[0].keys())
             for frame_info in frame_list:
@@ -115,8 +115,7 @@ def parse_file(infile, options):
         # 4. dump all information aggregated by time
         time_frame_list = aggregate_list_by_frame_number(
             frame_list, 'frame_number', options.period_frames)
-        output_file = '%s.%s.csv' % (options.infile, 'time')
-        with open(output_file, 'w') as f:
+        with open(outfile, 'w') as f:
             # aggregated values
             time_key_list = list(time_frame_list[0].keys())
             header_format = '# %s\n' % ','.join(['%s'] * len(time_key_list))
@@ -309,10 +308,17 @@ def get_options(argv):
             choices=FUNC_CHOICES.keys(),
             help='%s' % (' | '.join("{}: {}".format(k, v) for k, v in
                          FUNC_CHOICES.items())),)
-    parser.add_argument('infile', type=str,
-                        default=default_values['infile'],
-                        metavar='input-file',
-                        help='input file',)
+    parser.add_argument(
+            'infile', type=str, nargs='?',
+            default=default_values['infile'],
+            metavar='input-file',
+            help='input file',)
+    parser.add_argument(
+            'outfile', type=str, nargs='?',
+            default=default_values['outfile'],
+            metavar='output-file',
+            help='output file',)
+
     # do the parsing
     options = parser.parse_args(argv[1:])
     # implement help
@@ -325,8 +331,18 @@ def get_options(argv):
 def main(argv):
     # parse options
     options = get_options(argv)
+
+    # get infile/outfile
+    if options.infile == '-':
+        options.infile = '/dev/fd/0'
+    if options.outfile == '-':
+        options.outfile = '/dev/fd/1'
+    # print results
+    if options.debug > 0:
+        print(options)
+
     # do something
-    parse_file(options.infile, options)
+    parse_file(options.infile, options.outfile, options)
 
 
 if __name__ == '__main__':
