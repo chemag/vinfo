@@ -17,12 +17,20 @@ import re
 import subprocess
 import sys
 
+FUNC_CHOICES = {
+    'help': 'show help options',
+    'frames': 'run frame analysis',
+    'time': 'run frame analysis',
+    'qp': 'run qp analysis',
+}
+
 
 default_values = {
     'debug': 0,
     'dry_run': False,
     'stream_id': 'v:0',
     'period_frames': 30,
+    'func': 'help',
     'infile': None,
 }
 
@@ -37,7 +45,8 @@ def run(command, options, **kwargs):
     shell = type(command) in (type(''), type(u''))
     if options.dry_run:
         return 0, b'stdout', b'stderr'
-    p = subprocess.Popen(command, stdin=stdin, stdout=subprocess.PIPE,
+    p = subprocess.Popen(command, stdin=stdin,  # noqa: P204
+                         stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE, bufsize=bufsize,
                          universal_newlines=universal_newlines,
                          env=env, close_fds=close_fds, shell=shell)
@@ -60,10 +69,13 @@ class InvalidCommand(Exception):
 def parse_file(infile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
-    # 1. get video information from ffprobe
+    # 1. get stream information from ffprobe
     streams_list = get_streams_information(infile, options)
+
+    # 2. get per-frame information from ffprobe
     frame_list = get_frames_information(infile, options)
-    # 2. get QP information from qpextract (hevc-only so far)
+
+    # 3. get QP information from qpextract (hevc-only so far)
     if streams_list[0]['codec_name'] == 'hevc':
         try:
             qp_list = get_qpextract_information(infile, options)
@@ -71,43 +83,47 @@ def parse_file(infile, options):
                 # qpextract is very picky (only accepts .265 files)
                 0
             else:
-                # 3. zip information together
+                # zip information together
                 frame_list = [{**ffprobe_info, **qp_info}
                               for ffprobe_info, qp_info in
                               zip(frame_list, qp_list)]
         except InvalidCommand:
             print('warning: could not run qpextract in %s' % infile)
             pass
-    # 4. dump all information together as frames
-    output_file = '%s.%s.csv' % (options.infile, 'frames')
-    with open(output_file, 'w') as f:
-        # get all the possible keys
-        key_list = list(frame_list[0].keys())
-        for frame_info in frame_list:
-            for key in frame_info:
-                if key not in key_list:
-                    key_list.append(key)
-        # write the header
-        header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
-        f.write(header_format % tuple(key_list))
-        # write the line format
-        line_format = '{' + '},{'.join(key_list) + '}\n'
-        # write all the lines
-        for frame_info in frame_list:
-            d = defaultdict(str, **frame_info)
-            f.write(line_format.format_map(d))
-    # 5. dump all information aggregated by time
-    time_frame_list = aggregate_list_by_frame_number(
-        frame_list, 'frame_number', options.period_frames)
-    output_file = '%s.%s.csv' % (options.infile, 'time')
-    with open(output_file, 'w') as f:
-        # aggregated values
-        time_key_list = list(time_frame_list[0].keys())
-        header_format = '# %s\n' % ','.join(['%s'] * len(time_key_list))
-        f.write(header_format % tuple(time_key_list))
-        line_format = ','.join(['%s'] * len(time_key_list)) + '\n'
-        for time_frame_info in time_frame_list:
-            f.write(line_format % tuple(time_frame_info.values()))
+
+    if options.func == 'frames':
+        # 4. dump all information together as frames
+        output_file = '%s.%s.csv' % (options.infile, 'frames')
+        with open(output_file, 'w') as f:
+            # get all the possible keys
+            key_list = list(frame_list[0].keys())
+            for frame_info in frame_list:
+                for key in frame_info:
+                    if key not in key_list:
+                        key_list.append(key)
+            # write the header
+            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
+            f.write(header_format % tuple(key_list))
+            # write the line format
+            line_format = '{' + '},{'.join(key_list) + '}\n'
+            # write all the lines
+            for frame_info in frame_list:
+                d = defaultdict(str, **frame_info)
+                f.write(line_format.format_map(d))
+
+    if options.func == 'time':
+        # 4. dump all information aggregated by time
+        time_frame_list = aggregate_list_by_frame_number(
+            frame_list, 'frame_number', options.period_frames)
+        output_file = '%s.%s.csv' % (options.infile, 'time')
+        with open(output_file, 'w') as f:
+            # aggregated values
+            time_key_list = list(time_frame_list[0].keys())
+            header_format = '# %s\n' % ','.join(['%s'] * len(time_key_list))
+            f.write(header_format % tuple(time_key_list))
+            line_format = ','.join(['%s'] * len(time_key_list)) + '\n'
+            for time_frame_info in time_frame_list:
+                f.write(line_format % tuple(time_frame_info.values()))
 
 
 def aggregate_list_by_frame_number(in_list, field, period):
@@ -287,12 +303,22 @@ def get_options(argv):
                         default=default_values['period_frames'],
                         metavar='PERIOD_FRAMES',
                         help='period in frames',)
+    parser.add_argument(
+            'func', type=str,
+            default=default_values['func'],
+            choices=FUNC_CHOICES.keys(),
+            help='%s' % (' | '.join("{}: {}".format(k, v) for k, v in
+                         FUNC_CHOICES.items())),)
     parser.add_argument('infile', type=str,
                         default=default_values['infile'],
                         metavar='input-file',
                         help='input file',)
     # do the parsing
     options = parser.parse_args(argv[1:])
+    # implement help
+    if options.func == 'help':
+        parser.print_help()
+        sys.exit(0)
     return options
 
 
