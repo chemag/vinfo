@@ -10,7 +10,9 @@ Implemented as a script around a few other CLI tools (ffprobe).
 
 import argparse
 from collections import defaultdict
+import numpy as np
 import os
+import re
 import subprocess
 import sys
 
@@ -18,6 +20,7 @@ FUNC_CHOICES = {
     'help': 'show help options',
     'frames': 'run frame analysis',
     'time': 'run frame analysis',
+    'qp': 'run qp analysis',
 }
 
 
@@ -102,6 +105,27 @@ def parse_file(infile, outfile, options):
             line_format = ','.join(['%s'] * len(time_key_list)) + '\n'
             for time_frame_info in time_frame_list:
                 f.write(line_format % tuple(time_frame_info.values()))
+
+    if options.func == 'qp':
+        # 1. get per-frame, qp information from ffprobe
+        frame_list = get_frames_qp_information(infile, options)
+        # 2. dump all information together as frames
+        with open(outfile, 'w') as f:
+            # get all the possible keys
+            key_list = list(frame_list[0].keys())
+            for frame_info in frame_list:
+                for key in frame_info:
+                    if key not in key_list:
+                        key_list.append(key)
+            # write the header
+            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
+            f.write(header_format % tuple(key_list))
+            # write the line format
+            line_format = '{' + '},{'.join(key_list) + '}\n'
+            # write all the lines
+            for frame_info in frame_list:
+                d = defaultdict(str, **frame_info)
+                f.write(line_format.format_map(d))
 
 
 def aggregate_list_by_frame_number(in_list, field, period):
@@ -201,6 +225,93 @@ def parse_ffprobe_output(out, label, debug):
             if debug > 0:
                 print('warning: unknown line ("%s")' % line)
     return item_list
+
+
+# get QP information
+def get_frames_qp_information(infile, options):
+    frame_list = get_frames_information(infile, options)
+    qp_list = get_qp_information(infile, options)
+    # join the lists (note that zip() stops at the smallest list)
+    out = []
+    for frame_info, qp_info in zip(frame_list, qp_list):
+        # get the qp list as a numpy array
+        qp_arr = np.array(qp_info[-1])
+        frame_info['qp_min'] = qp_arr.min()
+        frame_info['qp_max'] = qp_arr.max()
+        frame_info['qp_mean'] = qp_arr.mean()
+        frame_info['qp_var'] = qp_arr.var()
+        out.append(frame_info)
+    return out
+
+
+def get_qp_information(infile, options):
+    command = f'ffprobe -v quiet -show_frames -debug qp {infile}'
+    returncode, out, err = run(command, options)
+    if returncode != 0:
+        raise InvalidCommand('error running "%s"' % command)
+    # parse the output
+    return parse_qp_information(err, options.debug)
+
+
+def parse_qp_information(out, debug):
+    qp_full = []
+    cur_frame = -1
+    resolution = None
+    pix_fmt = None
+    frame_type = None
+    qp_vals = []
+
+    reinit_pattern = (
+        r'\[[^\]]+\] Reinit context to (?P<resolution>\d+x\d+), '
+        r'pix_fmt: (?P<pix_fmt>.+)'
+    )
+    newframe_pattern = (
+        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+    )
+    qp_pattern = (
+        r'\[[^\]]+\] (?P<qp_str>\d+)'
+    )
+
+    for line in out.splitlines():
+        line = line.decode('ascii').strip()
+        if 'Reinit context to' in line:
+            # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
+            match = re.search(reinit_pattern, line)
+            if not match:
+                print('warning: invalid reinit line ("%s")' % line)
+                sys.exit(-1)
+            resolution = match.group('resolution')
+            pix_fmt = match.group('pix_fmt')
+
+        elif 'New frame, type:' in line:
+            # [h264 @ 0x30d1a80] New frame, type: I
+            match = re.search(newframe_pattern, line)
+            if not match:
+                print('warning: invalid newframe line ("%s")' % line)
+                sys.exit(-1)
+            # store the old frame info
+            if cur_frame != -1:
+                qp_full.append([cur_frame, resolution, pix_fmt, frame_type,
+                                qp_vals])
+                qp_vals = []
+            # new frame
+            frame_type = match.group('frame_type')
+            cur_frame += 1
+
+        else:
+            # [h264 @ 0x30d1a80] 3535353535353535353535...
+            match = re.search(qp_pattern, line)
+            if not match:
+                continue
+            qp_str = match.group('qp_str')
+            qp_vals += [int(qp_str[i:i+2]) for i in range(0, len(qp_str), 2)]
+
+    # dump the last state
+    if qp_vals:
+        qp_full.append([cur_frame, resolution, pix_fmt, frame_type, qp_vals])
+        qp_vals = []
+
+    return qp_full
 
 
 def get_options(argv):
