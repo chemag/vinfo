@@ -202,6 +202,10 @@ def parse_ffprobe_per_frame_info(out, debug):
             'frame_number': frame_number,
         }
         new_frame_info.update(frame_info)
+        # add bits per pixel (bpp)
+        new_frame_info['bpp'] = ((int(new_frame_info['pkt_size']) * 8) /
+                                 (int(new_frame_info['width']) *
+                                  int(new_frame_info['height'])))
         new_frame_list.append(new_frame_info)
         frame_number += 1
     return new_frame_list
