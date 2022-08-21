@@ -309,27 +309,32 @@ def get_options(argv):
     """
     # init parser
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--debug', action='count',
-                        dest='debug', default=default_values['debug'],
-                        help='Increase verbosity (multiple times for more)',)
-    parser.add_argument('--quiet', action='store_const',
-                        dest='debug', const=-1,
-                        help='Zero verbosity',)
-    parser.add_argument('-D', '--dry-run', action='store_true',
-                        dest='dry_run', default=default_values['dry_run'],
-                        help='Dry run',)
-    parser.add_argument('--stream-id', action='store', type=str,
-                        dest='stream_id',
-                        default=default_values['stream_id'],
-                        metavar='STREAM_ID',
-                        help='stream ID',)
-    parser.add_argument('--period-frames', action='store', type=int,
-                        dest='period_frames',
-                        default=default_values['period_frames'],
-                        metavar='PERIOD_FRAMES',
-                        help='period in frames',)
     parser.add_argument(
-        '--add-qp', action='store_const',
+        '-d', '--debug', action='count',
+        dest='debug', default=default_values['debug'],
+        help='Increase verbosity (multiple times for more)',)
+    parser.add_argument(
+        '--quiet', action='store_const',
+        dest='debug', const=-1,
+        help='Zero verbosity',)
+    parser.add_argument(
+        '-D', '--dry-run', action='store_true',
+        dest='dry_run', default=default_values['dry_run'],
+        help='Dry run',)
+    parser.add_argument(
+        '--stream-id', action='store', type=str,
+        dest='stream_id',
+        default=default_values['stream_id'],
+        metavar='STREAM_ID',
+        help='stream ID',)
+    parser.add_argument(
+        '--period-frames', action='store', type=int,
+        dest='period_frames',
+        default=default_values['period_frames'],
+        metavar='PERIOD_FRAMES',
+        help='period in frames',)
+    parser.add_argument(
+        '--add-qp', action='store_const', default=default_values['add_qp'],
         dest='add_qp', const=True,
         help='Add QP columns (min, max, mean, var)',)
     parser.add_argument(
@@ -337,21 +342,21 @@ def get_options(argv):
         dest='add_qp', const=False,
         help='Do not add QP columns (min, max, mean, var)',)
     parser.add_argument(
-            'func', type=str,
-            default=default_values['func'],
-            choices=FUNC_CHOICES.keys(),
-            help='%s' % (' | '.join("{}: {}".format(k, v) for k, v in
-                         FUNC_CHOICES.items())),)
+        'func', type=str,
+        default=default_values['func'],
+        choices=FUNC_CHOICES.keys(),
+        help='%s' % (' | '.join("{}: {}".format(k, v) for k, v in
+                                FUNC_CHOICES.items())),)
     parser.add_argument(
-            'infile', type=str, nargs='?',
-            default=default_values['infile'],
-            metavar='input-file',
-            help='input file',)
+        'infile', type=str, nargs='?',
+        default=default_values['infile'],
+        metavar='input-file',
+        help='input file',)
     parser.add_argument(
-            'outfile', type=str, nargs='?',
-            default=default_values['outfile'],
-            metavar='output-file',
-            help='output file',)
+        'outfile', type=str, nargs='?',
+        default=default_values['outfile'],
+        metavar='output-file',
+        help='output file',)
 
     # do the parsing
     options = parser.parse_args(argv[1:])
