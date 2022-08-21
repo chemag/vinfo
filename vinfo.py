@@ -20,7 +20,6 @@ FUNC_CHOICES = {
     'help': 'show help options',
     'frames': 'run frame analysis',
     'time': 'run frame analysis',
-    'qp': 'run qp analysis',
 }
 
 
@@ -29,6 +28,7 @@ default_values = {
     'dry_run': False,
     'stream_id': 'v:0',
     'period_frames': 30,
+    'add_qp': True,
     'func': 'help',
     'infile': None,
     'outfile': None,
@@ -71,8 +71,11 @@ def parse_file(infile, outfile, options):
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
 
     if options.func == 'frames':
-        # 1. get per-frame information from ffprobe
+        # 1. get per-frame, qp information from ffprobe
         frame_list = get_frames_information(infile, options)
+        if options.add_qp:
+            qp_list = get_qp_information(infile, options)
+            frame_list = join_frames_and_qp(frame_list, qp_list)
         # 2. dump all information together as frames
         with open(outfile, 'w') as f:
             # get all the possible keys
@@ -105,27 +108,6 @@ def parse_file(infile, outfile, options):
             line_format = ','.join(['%s'] * len(time_key_list)) + '\n'
             for time_frame_info in time_frame_list:
                 f.write(line_format % tuple(time_frame_info.values()))
-
-    if options.func == 'qp':
-        # 1. get per-frame, qp information from ffprobe
-        frame_list = get_frames_qp_information(infile, options)
-        # 2. dump all information together as frames
-        with open(outfile, 'w') as f:
-            # get all the possible keys
-            key_list = list(frame_list[0].keys())
-            for frame_info in frame_list:
-                for key in frame_info:
-                    if key not in key_list:
-                        key_list.append(key)
-            # write the header
-            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
-            f.write(header_format % tuple(key_list))
-            # write the line format
-            line_format = '{' + '},{'.join(key_list) + '}\n'
-            # write all the lines
-            for frame_info in frame_list:
-                d = defaultdict(str, **frame_info)
-                f.write(line_format.format_map(d))
 
 
 def aggregate_list_by_frame_number(in_list, field, period):
@@ -232,9 +214,7 @@ def parse_ffprobe_output(out, label, debug):
 
 
 # get QP information
-def get_frames_qp_information(infile, options):
-    frame_list = get_frames_information(infile, options)
-    qp_list = get_qp_information(infile, options)
+def join_frames_and_qp(frame_list, qp_list):
     # join the lists (note that zip() stops at the smallest list)
     out = []
     for frame_info, qp_info in zip(frame_list, qp_list):
@@ -348,6 +328,14 @@ def get_options(argv):
                         default=default_values['period_frames'],
                         metavar='PERIOD_FRAMES',
                         help='period in frames',)
+    parser.add_argument(
+        '--add-qp', action='store_const',
+        dest='add_qp', const=True,
+        help='Add QP columns (min, max, mean, var)',)
+    parser.add_argument(
+        '--noadd-qp', action='store_const',
+        dest='add_qp', const=False,
+        help='Do not add QP columns (min, max, mean, var)',)
     parser.add_argument(
             'func', type=str,
             default=default_values['func'],
