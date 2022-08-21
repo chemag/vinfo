@@ -29,6 +29,7 @@ default_values = {
     'stream_id': 'v:0',
     'period_frames': 30,
     'add_qp': True,
+    'add_bpp': True,
     'func': 'help',
     'infile': None,
     'outfile': None,
@@ -73,6 +74,8 @@ def parse_file(infile, outfile, options):
     if options.func == 'frames':
         # 1. get per-frame, qp information from ffprobe
         frame_list = get_frames_information(infile, options)
+        if options.add_bpp:
+            frame_list = add_bpp_column(frame_list)
         if options.add_qp:
             qp_list = get_qp_information(infile, options)
             frame_list = join_frames_and_qp(frame_list, qp_list)
@@ -213,6 +216,20 @@ def parse_ffprobe_output(out, label, debug):
     return item_list
 
 
+# BPP information
+def add_bpp_column(frame_list):
+    out = []
+    for frame_info in frame_list:
+        width = int(frame_info['width'])
+        height = int(frame_info['height'])
+        pkt_size = int(frame_info['pkt_size'])
+        # bytes/frame * bits/byte / pixels/frame = bits/pixel
+        bpp = (pkt_size * 8) / (width * height)
+        frame_info['bpp'] = bpp
+        out.append(frame_info)
+    return out
+
+
 # get QP information
 def join_frames_and_qp(frame_list, qp_list):
     # join the lists (note that zip() stops at the smallest list)
@@ -341,6 +358,14 @@ def get_options(argv):
         '--noadd-qp', action='store_const',
         dest='add_qp', const=False,
         help='Do not add QP columns (min, max, mean, var)',)
+    parser.add_argument(
+        '--add-bpp', action='store_const', default=default_values['add_bpp'],
+        dest='add_bpp', const=True,
+        help='Add BPP column (bits per pixel)',)
+    parser.add_argument(
+        '--noadd-bpp', action='store_const',
+        dest='add_bpp', const=False,
+        help='Do not add BPP column (bits per pixel)',)
     parser.add_argument(
         'func', type=str,
         default=default_values['func'],
