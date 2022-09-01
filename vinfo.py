@@ -313,7 +313,7 @@ def parse_qp_information(out, debug):
         r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
     )
     qp_pattern = (
-        r'\[[^\]]+\] (?P<qp_str>\d+)'
+        r'\[[^\]]+\] (?P<qp_str>\d+)$'
     )
 
     for line in out.splitlines():
