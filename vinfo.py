@@ -11,6 +11,7 @@ Implemented as a script around a few other CLI tools (ffprobe).
 import argparse
 from collections import defaultdict
 import numpy as np
+import math
 import os
 import re
 import subprocess
@@ -30,6 +31,7 @@ default_values = {
     'period_frames': 30,
     'add_qp': True,
     'add_bpp': True,
+    'add_motion_vec': True,
     'func': 'help',
     'infile': None,
     'outfile': None,
@@ -79,6 +81,9 @@ def parse_file(infile, outfile, options):
         if options.add_qp:
             qp_list = get_qp_information(infile, options)
             frame_list = join_frames_and_qp(frame_list, qp_list)
+        if options.add_motion_vec:
+            mv_list = get_mv_information(infile, options)
+            frame_list = join_frames_and_mv(frame_list, mv_list)
         # 2. dump all information together as frames
         with open(outfile, 'w') as f:
             # get all the possible keys
@@ -245,6 +250,35 @@ def join_frames_and_qp(frame_list, qp_list):
     return out
 
 
+def join_frames_and_mv(frame_list, mv_list):
+    # join the lists (note that zip() stops at the smallest list)
+    out = []
+    for frame_info, mv_info in zip(frame_list, mv_list):
+        # get the qp list as a numpy array
+        mvx_arr = np.array(mv_info[-2])
+        mvy_arr = np.array(mv_info[-1])
+        # TODO(chemag): stack arrays into (<len>, 2) instead of (1, <len>, 2)
+        mvxy_arr = np.dstack((mvx_arr, mvy_arr))
+        # TODO(chemag): there has to be a better numpy way to do this
+        frame_mb_total = len(mvxy_arr[0])
+        frame_mb_nonzero = 0
+        frame_mod_sum = 0
+        for (x, y) in mvxy_arr[0]:
+            if x != 0 or y != 0:
+                frame_mb_nonzero += 1
+                mod = abs(y if x == 0 else (x if y == 0 else
+                                            math.sqrt(x ** 2 + y ** 2)))
+                # print(f'x: {x}  y: {y}  mod: {mod}')
+                frame_mod_sum += mod
+        frame_mod_avg = (frame_mod_sum / frame_mb_nonzero if
+                         frame_mb_nonzero else 0.0)
+        # frame_mb_zero = frame_mb_total - frame_mb_nonzero
+        frame_info['mv_nonzero_ratio'] = frame_mb_nonzero / frame_mb_total
+        frame_info['mv_mod_average'] = frame_mod_avg
+        out.append(frame_info)
+    return out
+
+
 def get_qp_information(infile, options):
     command = f'ffprobe -v quiet -show_frames -debug qp {infile}'
     returncode, out, err = run(command, options)
@@ -252,6 +286,15 @@ def get_qp_information(infile, options):
         raise InvalidCommand('error running "%s"' % command)
     # parse the output
     return parse_qp_information(err, options.debug)
+
+
+def get_mv_information(infile, options):
+    command = f'ffprobe -v quiet -show_frames -debug motion_vec {infile}'
+    returncode, out, err = run(command, options)
+    if returncode != 0:
+        raise InvalidCommand('error running "%s"' % command)
+    # parse the output
+    return parse_mv_information(err, options.debug)
 
 
 def parse_qp_information(out, debug):
@@ -315,6 +358,80 @@ def parse_qp_information(out, debug):
     return qp_full
 
 
+def parse_mv_information(out, debug):
+    mv_full = []
+    cur_frame = -1
+    resolution = None
+    pix_fmt = None
+    frame_type = None
+    mv_vals_x = []
+    mv_vals_y = []
+
+    reinit_pattern = (
+        r'\[[^\]]+\] Reinit context to (?P<resolution>\d+x\d+), '
+        r'pix_fmt: (?P<pix_fmt>.+)'
+    )
+    newframe_pattern = (
+        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+    )
+    mv_pattern = (
+        r'\[[^\]]+\] (?P<mv_str>[\d\- ]+)'
+    )
+
+    for line in out.splitlines():
+        line = line.decode('ascii').strip()
+        if 'Reinit context to' in line:
+            # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
+            match = re.search(reinit_pattern, line)
+            if not match:
+                print('warning: invalid reinit line ("%s")' % line)
+                sys.exit(-1)
+            resolution = match.group('resolution')
+            pix_fmt = match.group('pix_fmt')
+
+        elif 'New frame, type:' in line:
+            # [h264 @ 0x30d1a80] New frame, type: I
+            match = re.search(newframe_pattern, line)
+            if not match:
+                print('warning: invalid newframe line ("%s")' % line)
+                sys.exit(-1)
+            # store the old frame info
+            if cur_frame != -1:
+                mv_full.append([cur_frame, resolution, pix_fmt, frame_type,
+                                mv_vals_x, mv_vals_y])
+                mv_vals_x = []
+                mv_vals_y = []
+            # new frame
+            frame_type = match.group('frame_type')
+            cur_frame += 1
+
+        else:
+            # [h264 @ 0x30d1a80]     0    0   0    0 -12   -2   0    0
+            match = re.search(mv_pattern, line)
+            if not match:
+                continue
+            mv_str = match.group('mv_str')
+            mv_list = []
+            for s in mv_str.split():
+                while '-' in s[1:]:
+                    # process cases where the minus sign happens after a digit
+                    index = s.index('-', 1)
+                    mv_list.append(int(s[:index]))
+                    s = s[index:]
+                mv_list.append(int(s))
+            mv_vals_x += mv_list[::2]
+            mv_vals_y += mv_list[1::2]
+
+    # dump the last state
+    if mv_vals_x:
+        mv_full.append([cur_frame, resolution, pix_fmt, frame_type,
+                        mv_vals_x, mv_vals_y])
+        mv_vals_x = []
+        mv_vals_y = []
+
+    return mv_full
+
+
 def get_options(argv):
     """Generic option parser.
 
@@ -366,6 +483,15 @@ def get_options(argv):
         '--noadd-bpp', action='store_const',
         dest='add_bpp', const=False,
         help='Do not add BPP column (bits per pixel)',)
+    parser.add_argument(
+        '--add-motion-vec', action='store_const',
+        default=default_values['add_motion_vec'],
+        dest='add_motion_vec', const=True,
+        help='Add motion vector columns',)
+    parser.add_argument(
+        '--noadd-motion-vec', action='store_const',
+        dest='add_motion_vec', const=False,
+        help='Do not add motion vector columns',)
     parser.add_argument(
         'func', type=str,
         default=default_values['func'],
