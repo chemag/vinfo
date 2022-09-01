@@ -32,6 +32,7 @@ default_values = {
     'add_qp': True,
     'add_bpp': True,
     'add_motion_vec': True,
+    'add_mb_type': True,
     'func': 'help',
     'infile': None,
     'outfile': None,
@@ -81,6 +82,9 @@ def parse_file(infile, outfile, options):
         if options.add_qp:
             qp_list = get_qp_information(infile, options)
             frame_list = join_frames_and_qp(frame_list, qp_list)
+        if options.add_mb_type:
+            mb_list = get_mb_information(infile, options)
+            frame_list = join_frames_and_mb(frame_list, mb_list)
         if options.add_motion_vec:
             mv_list = get_mv_information(infile, options)
             frame_list = join_frames_and_mv(frame_list, mv_list)
@@ -250,6 +254,18 @@ def join_frames_and_qp(frame_list, qp_list):
     return out
 
 
+def join_frames_and_mb(frame_list, mb_list):
+    # join the lists (note that zip() stops at the smallest list)
+    out = []
+    for frame_info, mb_info in zip(frame_list, mb_list):
+        # get the mb_type
+        mb_list = mb_info[-len(MB_TYPE_LIST):]
+        for index, mb_type in enumerate(MB_TYPE_LIST):
+            frame_info[f'mb_type_{mb_type}'] = mb_list[index] / sum(mb_list)
+        out.append(frame_info)
+    return out
+
+
 def join_frames_and_mv(frame_list, mv_list):
     # join the lists (note that zip() stops at the smallest list)
     out = []
@@ -286,6 +302,15 @@ def get_qp_information(infile, options):
         raise InvalidCommand('error running "%s"' % command)
     # parse the output
     return parse_qp_information(err, options.debug)
+
+
+def get_mb_information(infile, options):
+    command = f'ffprobe -v quiet -show_frames -debug mb_type {infile}'
+    returncode, out, err = run(command, options)
+    if returncode != 0:
+        raise InvalidCommand('error running "%s"' % command)
+    # parse the output
+    return parse_mb_information(err, options.debug)
 
 
 def get_mv_information(infile, options):
@@ -356,6 +381,99 @@ def parse_qp_information(out, debug):
         qp_vals = []
 
     return qp_full
+
+
+MB_TYPE_LIST = [
+  'P',  # IS_PCM(mb_type)  // MB_TYPE_INTRA_PCM
+  'A',  # IS_INTRA(mb_type) && IS_ACPRED(mb_type)  // MB_TYPE_ACPRED
+  'i',  # IS_INTRA4x4(mb_type)  // MB_TYPE_INTRA4x4
+  'I',  # IS_INTRA16x16(mb_type)  // MB_TYPE_INTRA16x16
+  'd',  # IS_DIRECT(mb_type) && IS_SKIP(mb_type)
+  'D',  # IS_DIRECT(mb_type)  // MB_TYPE_DIRECT2
+  'g',  # IS_GMC(mb_type) && IS_SKIP(mb_type)
+  'G',  # IS_GMC(mb_type)  // MB_TYPE_GMC
+  'S',  # IS_SKIP(mb_type)  // MB_TYPE_SKIP
+  '>',  # !USES_LIST(mb_type, 1)
+  '<',  # !USES_LIST(mb_type, 0)
+  'X',  # av_assert2(USES_LIST(mb_type, 0) && USES_LIST(mb_type, 1))
+]
+
+
+def parse_mb_information(out, debug):
+    mb_full = []
+    cur_frame = -1
+    resolution = None
+    pix_fmt = None
+    frame_type = None
+    mb_dict = {}
+
+    reinit_pattern = (
+        r'\[[^\]]+\] Reinit context to (?P<resolution>\d+x\d+), '
+        r'pix_fmt: (?P<pix_fmt>.+)'
+    )
+    newframe_pattern = (
+        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+    )
+    mb_pattern = (
+        r'\[[^\]]+\] (?P<mb_str>[PAiIdDgGS><X+\-|= ]+)$'
+    )
+
+    for line in out.splitlines():
+        line = line.decode('ascii').strip()
+        if 'Reinit context to' in line:
+            # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
+            match = re.search(reinit_pattern, line)
+            if not match:
+                print('warning: invalid reinit line ("%s")' % line)
+                sys.exit(-1)
+            resolution = match.group('resolution')
+            pix_fmt = match.group('pix_fmt')
+
+        elif 'New frame, type:' in line:
+            # [h264 @ 0x30d1a80] New frame, type: I
+            match = re.search(newframe_pattern, line)
+            if not match:
+                print('warning: invalid newframe line ("%s")' % line)
+                sys.exit(-1)
+            # store the old frame info
+            if cur_frame != -1:
+                # flatten the mb_dict into a list
+                mb_dict_list = [mb_dict.get(mb_type, 0) for mb_type in
+                                MB_TYPE_LIST]
+                mb_full.append([cur_frame, resolution, pix_fmt, frame_type,
+                                *mb_dict_list])
+                mb_dict = {}
+            # new frame
+            frame_type = match.group('frame_type')
+            cur_frame += 1
+
+        else:
+            # "[h264 @ ...] S  S  S  S  S  >- S  S  S  S  S  S  >  S  S  S  "
+            match = re.search(mb_pattern, line)
+            if not match:
+                # print(f'error: invalid line: {line}')
+                continue
+            mb_str = match.group('mb_str')
+            # make sure mb_str length is a multiple of 3
+            while (len(mb_str) % 3) != 0:
+                mb_str += ' '
+            mb_list = [mb_str[i:i+1] for i in range(0, len(mb_str), 3)]
+            row_mb_dict = {mb_type: mb_list.count(mb_type) for mb_type in
+                           mb_list}
+            for k, v in row_mb_dict.items():
+                if k not in mb_dict:
+                    mb_dict[k] = 0
+                mb_dict[k] += v
+
+    # dump the last state
+    if mb_dict:
+        # flatten the mb_dict into a list
+        mb_dict_list = [mb_dict.get(mb_type, 0) for mb_type in MB_TYPE_LIST]
+        mb_full.append([cur_frame, resolution, pix_fmt, frame_type,
+                        *mb_dict_list])
+        mb_dict = {}
+
+    return mb_full
 
 
 def parse_mv_information(out, debug):
@@ -483,6 +601,15 @@ def get_options(argv):
         '--noadd-bpp', action='store_const',
         dest='add_bpp', const=False,
         help='Do not add BPP column (bits per pixel)',)
+    parser.add_argument(
+        '--add-mb-type', action='store_const',
+        default=default_values['add_mb_type'],
+        dest='add_mb_type', const=True,
+        help='Add MB type columns',)
+    parser.add_argument(
+        '--noadd-mb-type', action='store_const',
+        dest='add_mb_type', const=False,
+        help='Do not add MB type columns',)
     parser.add_argument(
         '--add-motion-vec', action='store_const',
         default=default_values['add_motion_vec'],
