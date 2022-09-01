@@ -375,7 +375,7 @@ def parse_mv_information(out, debug):
         r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
     )
     mv_pattern = (
-        r'\[[^\]]+\] (?P<mv_str>[\d\- ]+)'
+        r'\[[^\]]+\] (?P<mv_str>[\d\- ]+)$'
     )
 
     for line in out.splitlines():
