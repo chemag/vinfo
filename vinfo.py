@@ -269,12 +269,22 @@ def join_frames_and_mb(frame_list, mb_list):
 
 
 def join_frames_and_mv(frame_list, mv_list):
+    # ensure both lists have the same length
+    assert len(frame_list) == len(mv_list), (
+        f'join error: different sizes {len(frame_list)} != {len(mv_list)}')
     # join the lists (note that zip() stops at the smallest list)
     out = []
+    common_key_list = set(frame_list[0].keys()) & set(mv_list[0].keys())
     for frame_info, mv_info in zip(frame_list, mv_list):
-        # get the qp list as a numpy array
-        mvx_arr = np.array(mv_info[-2])
-        mvy_arr = np.array(mv_info[-1])
+        # ensure all the common keys have the same values
+        for key in common_key_list:
+            assert frame_info[key] == mv_info[key], (
+                'join error: different value '
+                f'frame_info["{key}"] = {frame_info[key]} != '
+                f'mv_info["{key}"] = {mv_info[key]}')
+        # get the mv list as a numpy array
+        mvx_arr = np.array(mv_info['mv_vals_x'])
+        mvy_arr = np.array(mv_info['mv_vals_y'])
         # TODO(chemag): stack arrays into (<len>, 2) instead of (1, <len>, 2)
         mvxy_arr = np.dstack((mvx_arr, mvy_arr))
         # TODO(chemag): there has to be a better numpy way to do this
@@ -480,10 +490,10 @@ def parse_mb_information(out, debug):
 
 def parse_mv_information(out, debug):
     mv_full = []
-    cur_frame = -1
+    frame_number = -1
     resolution = None
     pix_fmt = None
-    frame_type = None
+    pict_type = None
     mv_vals_x = []
     mv_vals_y = []
 
@@ -492,7 +502,7 @@ def parse_mv_information(out, debug):
         r'pix_fmt: (?P<pix_fmt>.+)'
     )
     newframe_pattern = (
-        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+        r'\[[^\]]+\] New frame, type: (?P<pict_type>.+)'
     )
     mv_pattern = (
         r'\[[^\]]+\] (?P<mv_str>[\d\- ]+)$'
@@ -516,14 +526,21 @@ def parse_mv_information(out, debug):
                 print('warning: invalid newframe line ("%s")' % line)
                 sys.exit(-1)
             # store the old frame info
-            if cur_frame != -1:
-                mv_full.append([cur_frame, resolution, pix_fmt, frame_type,
-                                mv_vals_x, mv_vals_y])
+            if frame_number != -1:
+                mv_full.append({
+                    'frame_number': frame_number,
+                    # TODO(chemag): resolution here does not consider cropping
+                    # 'width': resolution.split('x')[0],
+                    # 'height': resolution.split('x')[1],
+                    'pix_fmt': pix_fmt,
+                    'pict_type': pict_type,
+                    'mv_vals_x': mv_vals_x,
+                    'mv_vals_y': mv_vals_y})
                 mv_vals_x = []
                 mv_vals_y = []
             # new frame
-            frame_type = match.group('frame_type')
-            cur_frame += 1
+            pict_type = match.group('pict_type')
+            frame_number += 1
 
         else:
             # [h264 @ 0x30d1a80]     0    0   0    0 -12   -2   0    0
@@ -544,8 +561,15 @@ def parse_mv_information(out, debug):
 
     # dump the last state
     if mv_vals_x:
-        mv_full.append([cur_frame, resolution, pix_fmt, frame_type,
-                        mv_vals_x, mv_vals_y])
+        mv_full.append({
+            'frame_number': frame_number,
+            # TODO(chemag): resolution here does not consider cropping
+            # 'width': resolution.split('x')[0],
+            # 'height': resolution.split('x')[1],
+            'pix_fmt': pix_fmt,
+            'pict_type': pict_type,
+            'mv_vals_x': mv_vals_x,
+            'mv_vals_y': mv_vals_y})
         mv_vals_x = []
         mv_vals_y = []
 
