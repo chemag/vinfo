@@ -267,13 +267,20 @@ def join_frames_and_qp(frame_list, qp_list):
 
 
 def join_frames_and_mb(frame_list, mb_list):
+    # ensure both lists have the same length
+    assert len(frame_list) == len(mb_list), (
+        f'join error: different sizes {len(frame_list)} != {len(mb_list)}')
     # join the lists (note that zip() stops at the smallest list)
+    common_key_list = set(frame_list[0].keys()) & set(mb_list[0].keys())
     out = []
     for frame_info, mb_info in zip(frame_list, mb_list):
-        # get the mb_type
-        mb_list = mb_info[-len(MB_TYPE_LIST):]
-        for index, mb_type in enumerate(MB_TYPE_LIST):
-            frame_info[f'mb_type_{mb_type}'] = mb_list[index] / sum(mb_list)
+        # ensure all the common keys have the same values
+        for key in common_key_list:
+            assert frame_info[key] == mb_info[key], (
+                'join error: different value '
+                f'frame_info["{key}"] = {frame_info[key]} != '
+                f'mb_info["{key}"] = {mb_info[key]}')
+        frame_info.update(mb_info['mb_info'])
         out.append(frame_info)
     return out
 
@@ -436,10 +443,10 @@ MB_TYPE_LIST = [
 
 def parse_mb_information(out, debug):
     mb_full = []
-    cur_frame = -1
+    frame_number = -1
     resolution = None
     pix_fmt = None
-    frame_type = None
+    pict_type = None
     mb_dict = {}
 
     reinit_pattern = (
@@ -447,7 +454,7 @@ def parse_mb_information(out, debug):
         r'pix_fmt: (?P<pix_fmt>.+)'
     )
     newframe_pattern = (
-        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+        r'\[[^\]]+\] New frame, type: (?P<pict_type>.+)'
     )
     mb_pattern = (
         r'\[[^\]]+\] (?P<mb_str>[PAiIdDgGS><X+\-|= ]+)$'
@@ -471,16 +478,23 @@ def parse_mb_information(out, debug):
                 print('warning: invalid newframe line ("%s")' % line)
                 sys.exit(-1)
             # store the old frame info
-            if cur_frame != -1:
-                # flatten the mb_dict into a list
-                mb_dict_list = [mb_dict.get(mb_type, 0) for mb_type in
-                                MB_TYPE_LIST]
-                mb_full.append([cur_frame, resolution, pix_fmt, frame_type,
-                                *mb_dict_list])
+            if frame_number != -1:
+                mb_info = {}
+                for mb_type in MB_TYPE_LIST:
+                    mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
+                                                     sum(mb_dict.values()))
+                mb_full.append({
+                    'frame_number': frame_number,
+                    # TODO(chemag): resolution here does not consider cropping
+                    # 'width': resolution.split('x')[0],
+                    # 'height': resolution.split('x')[1],
+                    'pix_fmt': pix_fmt,
+                    'pict_type': pict_type,
+                    'mb_info': {**mb_info}})
                 mb_dict = {}
             # new frame
-            frame_type = match.group('frame_type')
-            cur_frame += 1
+            pict_type = match.group('pict_type')
+            frame_number += 1
 
         else:
             # "[h264 @ ...] S  S  S  S  S  >- S  S  S  S  S  S  >  S  S  S  "
@@ -502,10 +516,18 @@ def parse_mb_information(out, debug):
 
     # dump the last state
     if mb_dict:
-        # flatten the mb_dict into a list
-        mb_dict_list = [mb_dict.get(mb_type, 0) for mb_type in MB_TYPE_LIST]
-        mb_full.append([cur_frame, resolution, pix_fmt, frame_type,
-                        *mb_dict_list])
+        mb_info = {}
+        for mb_type in MB_TYPE_LIST:
+            mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
+                                             sum(mb_dict.values()))
+        mb_full.append({
+            'frame_number': frame_number,
+            # TODO(chemag): resolution here does not consider cropping
+            # 'width': resolution.split('x')[0],
+            # 'height': resolution.split('x')[1],
+            'pix_fmt': pix_fmt,
+            'pict_type': pict_type,
+            'mb_info': {**mb_info}})
         mb_dict = {}
 
     return mb_full
