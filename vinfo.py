@@ -47,6 +47,8 @@ def run(command, options, **kwargs):
     default_close_fds = True if sys.platform == 'linux2' else False
     close_fds = kwargs.get('close_fds', default_close_fds)
     shell = type(command) in (type(''), type(u''))
+    if options.debug > 0:
+        print('running $ %s' % command)
     if options.dry_run:
         return 0, b'stdout', b'stderr'
     p = subprocess.Popen(command, stdin=stdin,  # noqa: P204
