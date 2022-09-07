@@ -243,11 +243,21 @@ def add_bpp_column(frame_list):
 
 # get QP information
 def join_frames_and_qp(frame_list, qp_list):
+    # ensure both lists have the same length
+    assert len(frame_list) == len(qp_list), (
+        f'join error: different sizes {len(frame_list)} != {len(qp_list)}')
     # join the lists (note that zip() stops at the smallest list)
+    common_key_list = set(frame_list[0].keys()) & set(qp_list[0].keys())
     out = []
     for frame_info, qp_info in zip(frame_list, qp_list):
+        # ensure all the common keys have the same values
+        for key in common_key_list:
+            assert frame_info[key] == qp_info[key], (
+                'join error: different value '
+                f'frame_info["{key}"] = {frame_info[key]} != '
+                f'qp_info["{key}"] = {qp_info[key]}')
         # get the qp list as a numpy array
-        qp_arr = np.array(qp_info[-1])
+        qp_arr = np.array(qp_info['qp_vals'])
         frame_info['qp_min'] = qp_arr.min()
         frame_info['qp_max'] = qp_arr.max()
         frame_info['qp_mean'] = qp_arr.mean()
@@ -336,10 +346,10 @@ def get_mv_information(infile, options):
 
 def parse_qp_information(out, debug):
     qp_full = []
-    cur_frame = -1
+    frame_number = -1
     resolution = None
     pix_fmt = None
-    frame_type = None
+    pict_type = None
     qp_vals = []
 
     reinit_pattern = (
@@ -347,7 +357,7 @@ def parse_qp_information(out, debug):
         r'pix_fmt: (?P<pix_fmt>.+)'
     )
     newframe_pattern = (
-        r'\[[^\]]+\] New frame, type: (?P<frame_type>.+)'
+        r'\[[^\]]+\] New frame, type: (?P<pict_type>.+)'
     )
     qp_pattern = (
         r'\[[^\]]+\] (?P<qp_str>\d+)$'
@@ -371,13 +381,19 @@ def parse_qp_information(out, debug):
                 print('warning: invalid newframe line ("%s")' % line)
                 sys.exit(-1)
             # store the old frame info
-            if cur_frame != -1:
-                qp_full.append([cur_frame, resolution, pix_fmt, frame_type,
-                                qp_vals])
+            if frame_number != -1:
+                qp_full.append({
+                    'frame_number': frame_number,
+                    # TODO(chemag): resolution here does not consider cropping
+                    # 'width': resolution.split('x')[0],
+                    # 'height': resolution.split('x')[1],
+                    'pix_fmt': pix_fmt,
+                    'pict_type': pict_type,
+                    'qp_vals': qp_vals})
                 qp_vals = []
             # new frame
-            frame_type = match.group('frame_type')
-            cur_frame += 1
+            pict_type = match.group('pict_type')
+            frame_number += 1
 
         else:
             # [h264 @ 0x30d1a80] 3535353535353535353535...
@@ -389,7 +405,14 @@ def parse_qp_information(out, debug):
 
     # dump the last state
     if qp_vals:
-        qp_full.append([cur_frame, resolution, pix_fmt, frame_type, qp_vals])
+        qp_full.append({
+            'frame_number': frame_number,
+            # TODO(chemag): resolution here does not consider cropping
+            # 'width': resolution.split('x')[0],
+            # 'height': resolution.split('x')[1],
+            'pix_fmt': pix_fmt,
+            'pict_type': pict_type,
+            'qp_vals': qp_vals})
         qp_vals = []
 
     return qp_full
