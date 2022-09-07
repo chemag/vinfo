@@ -378,8 +378,12 @@ def parse_qp_information(out, debug):
             if not match:
                 print('warning: invalid reinit line ("%s")' % line)
                 sys.exit(-1)
+            # reinit: flush all previous data
             resolution = match.group('resolution')
             pix_fmt = match.group('pix_fmt')
+            qp_full = []
+            frame_number = -1
+            qp_vals = []
 
         elif 'New frame, type:' in line:
             # [h264 @ 0x30d1a80] New frame, type: I
@@ -468,8 +472,12 @@ def parse_mb_information(out, debug):
             if not match:
                 print('warning: invalid reinit line ("%s")' % line)
                 sys.exit(-1)
+            # reinit: flush all previous data
             resolution = match.group('resolution')
             pix_fmt = match.group('pix_fmt')
+            mb_full = []
+            frame_number = -1
+            mb_dict = {}
 
         elif 'New frame, type:' in line:
             # [h264 @ 0x30d1a80] New frame, type: I
@@ -561,8 +569,13 @@ def parse_mv_information(out, debug):
             if not match:
                 print('warning: invalid reinit line ("%s")' % line)
                 sys.exit(-1)
+            # reinit: flush all previous data
             resolution = match.group('resolution')
             pix_fmt = match.group('pix_fmt')
+            mv_full = []
+            frame_number = -1
+            mv_vals_x = []
+            mv_vals_y = []
 
         elif 'New frame, type:' in line:
             # [h264 @ 0x30d1a80] New frame, type: I
