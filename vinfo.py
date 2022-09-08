@@ -444,6 +444,15 @@ MB_TYPE_LIST = [
   'X',  # av_assert2(USES_LIST(mb_type, 0) && USES_LIST(mb_type, 1))
 ]
 
+MB_TYPE_SIMPLIFIED_DICT = {
+    'intra': ['A', 'i', 'I', ],
+    'intra-pcm': ['P', ],
+    'inter': ['<', '>', ],
+    'skip-direct': ['S', 'd', 'D', ],
+    'other': ['X', ],
+    'gmc': ['g', 'G', ],
+}
+
 
 def parse_mb_information(out, debug):
     mb_full = []
@@ -491,6 +500,13 @@ def parse_mb_information(out, debug):
                 for mb_type in MB_TYPE_LIST:
                     mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
                                                      sum(mb_dict.values()))
+                # calculate the derived values
+                for mb_type2 in MB_TYPE_SIMPLIFIED_DICT.keys():
+                    mb_info[f'mb_type_{mb_type2}'] = 0
+                for mb_type2, mb_type_list in MB_TYPE_SIMPLIFIED_DICT.items():
+                    for mb_type in mb_type_list:
+                        mb_info[f'mb_type_{mb_type2}'] += (
+                            mb_info[f'mb_type_{mb_type}'])
                 mb_full.append({
                     'frame_number': frame_number,
                     # TODO(chemag): resolution here does not consider cropping
@@ -528,6 +544,13 @@ def parse_mb_information(out, debug):
         for mb_type in MB_TYPE_LIST:
             mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
                                              sum(mb_dict.values()))
+        # calculate the derived values
+        for mb_type2 in MB_TYPE_SIMPLIFIED_DICT.keys():
+            mb_info[f'mb_type_{mb_type2}'] = 0
+        for mb_type2, mb_type_list in MB_TYPE_SIMPLIFIED_DICT.items():
+            for mb_type in mb_type_list:
+                mb_info[f'mb_type_{mb_type2}'] += (
+                    mb_info[f'mb_type_{mb_type}'])
         mb_full.append({
             'frame_number': frame_number,
             # TODO(chemag): resolution here does not consider cropping
