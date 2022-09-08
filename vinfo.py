@@ -196,7 +196,7 @@ def aggregate_list_by_frame_number(in_list, field, period):
 
 # get video information
 def get_streams_information(infile, options):
-    command = 'ffprobe -select_streams %s -show_streams %s' % (
+    command = 'ffprobe -select_streams %s -count_frames -show_streams %s' % (
         options.stream_id, infile)
     returncode, out, err = run(command, options)
     assert returncode == 0, 'error running "%s"' % command
