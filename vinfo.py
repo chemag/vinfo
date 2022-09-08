@@ -19,6 +19,7 @@ import sys
 
 FUNC_CHOICES = {
     'help': 'show help options',
+    'streams': 'run stream analysis',
     'frames': 'run frame analysis',
     'time': 'run frame analysis',
 }
@@ -75,6 +76,30 @@ class InvalidCommand(Exception):
 def parse_file(infile, outfile, options):
     # 0. make sure file exists
     assert os.access(infile, os.R_OK), 'error: file %s does not exist' % infile
+
+    if options.func == 'streams':
+        # 1. get per-stream information from ffprobe
+        stream_list = get_streams_information(infile, options)
+        # 2. dump all information together as streams
+        with open(outfile, 'w') as f:
+            # get all the possible keys
+            key_list = list(stream_list[0].keys())
+            for stream_info in stream_list:
+                for key in stream_info:
+                    if key not in key_list:
+                        key_list.append(key)
+            # remove useless items
+            key_list = [key for key in key_list if not
+                        key.startswith('DISPOSITION:')]
+            # write the header
+            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
+            f.write(header_format % tuple(key_list))
+            # write the line format
+            line_format = '{' + '},{'.join(key_list) + '}\n'
+            # write all the lines
+            for stream_info in stream_list:
+                d = defaultdict(str, **stream_info)
+                f.write(line_format.format_map(d))
 
     if options.func == 'frames':
         # 1. get per-frame, qp information from ffprobe
