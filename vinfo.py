@@ -353,6 +353,8 @@ def join_frames_and_mv(frame_list, mv_list):
         frame_mb_total = len(mvxy_arr[0])
         frame_mb_nonzero = 0
         frame_mod_sum = 0
+        frame_max_x = 0
+        frame_max_y = 0
         for (x, y) in mvxy_arr[0]:
             # common case: no motion vector
             if x == 0 and y == 0:
@@ -361,12 +363,16 @@ def join_frames_and_mv(frame_list, mv_list):
             mod = abs(y if x == 0 else (x if y == 0 else
                                         math.sqrt(x ** 2 + y ** 2)))
             # print(f'x: {x}  y: {y}  mod: {mod}')
+            frame_max_x = max(frame_max_x, abs(x))
+            frame_max_y = max(frame_max_y, abs(y))
             frame_mod_sum += mod
         frame_mod_avg = (frame_mod_sum / frame_mb_nonzero if
                          frame_mb_nonzero else 0.0)
         # frame_mb_zero = frame_mb_total - frame_mb_nonzero
         frame_info['mv_nonzero_ratio'] = frame_mb_nonzero / frame_mb_total
         frame_info['mv_mod_average'] = frame_mod_avg
+        frame_info['mv_max_x'] = frame_max_x
+        frame_info['mv_max_y'] = frame_max_y
         out.append(frame_info)
     return out
 
