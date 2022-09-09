@@ -88,9 +88,6 @@ def parse_file(infile, outfile, options):
                 for key in stream_info:
                     if key not in key_list:
                         key_list.append(key)
-            # remove useless items
-            key_list = [key for key in key_list if not
-                        key.startswith('DISPOSITION:')]
             # write the header
             header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
             f.write(header_format % tuple(key_list))
@@ -201,7 +198,30 @@ def get_streams_information(infile, options):
     returncode, out, err = run(command, options)
     assert returncode == 0, 'error running "%s"' % command
     # parse the output
-    return parse_ffprobe_output(out, 'STREAM', options.debug)
+    stream_list = parse_ffprobe_output(out, 'STREAM', options.debug)
+    for stream_info in stream_list:
+        # 1. remove useless keys
+        rem_key_list = list(stream_info.keys())
+        rem_key_list = [key for key in rem_key_list if
+                        key.startswith('DISPOSITION:')]
+        for key in rem_key_list:
+            del stream_info[key]
+        # 2. add interesting keys
+        resolution_pixels_per_frame = (int(stream_info['width']) *
+                                       int(stream_info['height']))
+        file_size_bytes = os.path.getsize(infile)
+        file_size_bits = 8 * file_size_bytes
+        num_frames = int(stream_info['nb_read_frames'])
+        bits_per_pixel = file_size_bits / (
+            resolution_pixels_per_frame * num_frames)
+        frames_per_second = 30
+        bitrate_bps = file_size_bits * frames_per_second / num_frames
+        stream_info['resolution'] = resolution_pixels_per_frame
+        stream_info['filesize'] = file_size_bytes
+        stream_info['bpp'] = bits_per_pixel
+        stream_info['bitrate_mbps'] = bitrate_bps / 1e6
+
+    return stream_list
 
 
 def get_frames_information(infile, options):
