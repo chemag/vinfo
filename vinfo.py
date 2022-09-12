@@ -670,8 +670,18 @@ def parse_mv_information(out, debug):
                     'pict_type': pict_type,
                     'mv_vals_x': mv_vals_x,
                     'mv_vals_y': mv_vals_y})
+                if frame_number != 0 and pict_type == 'I':
+                    num_non_zero_mv_x = len([x for x in mv_vals_x if x != 0])
+                    num_non_zero_mv_y = len([y for y in mv_vals_y if y != 0])
+                    if num_non_zero_mv_x > 0 or num_non_zero_mv_y > 0:
+                        # there are non-zero MVs in an I-frame
+                        print(f'warning: I-frame {frame_number} has '
+                              f'{num_non_zero_mv_x}/{len(mv_vals_x)} (x) '
+                              f'{num_non_zero_mv_y}/{len(mv_vals_y)} (y) '
+                              'non-zero MV blocks', file=sys.stderr)
                 mv_vals_x = []
                 mv_vals_y = []
+
             # new frame
             pict_type = match.group('pict_type')
             frame_number += 1
