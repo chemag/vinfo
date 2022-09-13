@@ -32,6 +32,7 @@ default_values = {
     'stream_id': 'v:0',
     'period_frames': 30,
     'extract_mvs_path': None,
+    'add_header': True,
     'add_qp': True,
     'add_bpp': True,
     'add_motion_vec': True,
@@ -97,8 +98,9 @@ def parse_file(infile, outfile, options):
                     if key not in key_list:
                         key_list.append(key)
             # write the header
-            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
-            f.write(header_format % tuple(key_list))
+            if options.add_header:
+                header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
+                f.write(header_format % tuple(key_list))
             # write the line format
             line_format = '{' + '},{'.join(key_list) + '}\n'
             # write all the lines
@@ -129,8 +131,9 @@ def parse_file(infile, outfile, options):
                     if key not in key_list:
                         key_list.append(key)
             # write the header
-            header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
-            f.write(header_format % tuple(key_list))
+            if options.add_header:
+                header_format = '# %s\n' % ','.join(['%s'] * len(key_list))
+                f.write(header_format % tuple(key_list))
             # write the line format
             line_format = '{' + '},{'.join(key_list) + '}\n'
             # write all the lines
@@ -147,8 +150,10 @@ def parse_file(infile, outfile, options):
         with open(outfile, 'w') as f:
             # aggregated values
             time_key_list = list(time_frame_list[0].keys())
-            header_format = '# %s\n' % ','.join(['%s'] * len(time_key_list))
-            f.write(header_format % tuple(time_key_list))
+            if options.add_header:
+                header_format = '# %s\n' % ','.join(
+                    ['%s'] * len(time_key_list))
+                f.write(header_format % tuple(time_key_list))
             line_format = ','.join(['%s'] * len(time_key_list)) + '\n'
             for time_frame_info in time_frame_list:
                 f.write(line_format % tuple(time_frame_info.values()))
@@ -822,6 +827,15 @@ def get_options(argv):
         default=default_values['extract_mvs_path'],
         metavar='EXTRACT_MVS_PATH',
         help='location of the doc/examples/extract_mvs tool',)
+    parser.add_argument(
+        '--add-header', action='store_const',
+        default=default_values['add_header'],
+        dest='add_header', const=True,
+        help='Add header to CSV output',)
+    parser.add_argument(
+        '--noadd-header', action='store_const',
+        dest='add_header', const=False,
+        help='Do not add header to CSV output',)
     parser.add_argument(
         '--add-qp', action='store_const', default=default_values['add_qp'],
         dest='add_qp', const=True,
