@@ -5,7 +5,8 @@
 vinfo.py parses a video file, and dumps per-frame and per-second
 information about it.
 
-Implemented as a script around a few other CLI tools (ffprobe).
+Implemented as a script around a few other CLI tools (ffprobe,
+ffmpeg doc/examples/extract_mvs).
 """
 
 import argparse
@@ -30,6 +31,7 @@ default_values = {
     'dry_run': False,
     'stream_id': 'v:0',
     'period_frames': 30,
+    'extract_mvs_path': None,
     'add_qp': True,
     'add_bpp': True,
     'add_motion_vec': True,
@@ -80,6 +82,12 @@ def parse_file(infile, outfile, options):
     if options.func == 'streams':
         # 1. get per-stream information from ffprobe
         stream_list = get_streams_information(infile, options)
+        if options.add_motion_vec:
+            mv_distro_x, mv_distro_y = get_mv_distribution(infile, options)
+            stream_list[0]['mv_x_max'] = max(abs(v) for v in
+                                             mv_distro_x.keys())
+            stream_list[0]['mv_y_max'] = max(abs(v) for v in
+                                             mv_distro_y.keys())
         # 2. dump all information together as streams
         with open(outfile, 'w') as f:
             # get all the possible keys
@@ -402,6 +410,59 @@ def get_mv_information(infile, options):
         raise InvalidCommand('error running "%s"' % command)
     # parse the output
     return parse_mv_information(err, options.debug)
+
+
+def get_mv_distribution(infile, options):
+    # ensure the extract_mvs is executable
+    assert options.extract_mvs_path is not None, (
+        'error: need a valid --extract-mvs-path option')
+    assert os.access(options.extract_mvs_path, os.X_OK), (
+        f'error: --extract-mvs-path ({options.extract_mvs_path}) '
+        'must be executable')
+    command = f'{options.extract_mvs_path} {infile}'
+    returncode, out, err = run(command, options)
+    if returncode != 0:
+        raise InvalidCommand('error running "%s"' % command)
+    # parse the output
+    return parse_mv_distribution(out, options.debug)
+
+
+EXTRACT_MVS_FIELDS = [
+    'framenum',
+    'source',
+    'blockw',
+    'blockh',
+    'srcx',
+    'srcy',
+    'dstx',
+    'dsty',
+    'flags',
+    'motion_x',
+    'motion_y',
+    'motion_scale',
+]
+
+
+def parse_mv_distribution(out, debug):
+    hist_x = {}
+    hist_y = {}
+    # TODO(chemag): should we split the histograms by frame type?
+    seen_header = False
+    for line in out.splitlines():
+        line = line.decode('ascii').strip()
+        if not seen_header:
+            seen_header = True
+            assert line.split(',') == EXTRACT_MVS_FIELDS, (
+                f'error: invalid fields: {line.split(",")}')
+            continue
+        values = [field.strip() for field in line.split(',')]
+        d = {k: int(v) if k != 'flags' else v for k, v in
+             zip(EXTRACT_MVS_FIELDS, values)}
+        assert d['motion_scale'] == 4, (
+            'error: motion_scale is {d["motion_scale"]}')
+        hist_x[d['motion_x']] = hist_x.get(d['motion_x'], 0) + 1
+        hist_y[d['motion_y']] = hist_y.get(d['motion_y'], 0) + 1
+    return hist_x, hist_y
 
 
 def parse_qp_information(out, debug):
@@ -755,6 +816,12 @@ def get_options(argv):
         default=default_values['period_frames'],
         metavar='PERIOD_FRAMES',
         help='period in frames',)
+    parser.add_argument(
+        '--extract-mvs-path', action='store', type=str,
+        dest='extract_mvs_path',
+        default=default_values['extract_mvs_path'],
+        metavar='EXTRACT_MVS_PATH',
+        help='location of the doc/examples/extract_mvs tool',)
     parser.add_argument(
         '--add-qp', action='store_const', default=default_values['add_qp'],
         dest='add_qp', const=True,
