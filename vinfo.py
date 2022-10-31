@@ -227,8 +227,10 @@ def get_streams_information(infile, options):
         num_frames = int(stream_info['nb_read_frames'])
         bits_per_pixel = file_size_bits / (
             resolution_pixels_per_frame * num_frames)
-        frames_per_second = 30
-        bitrate_bps = file_size_bits * frames_per_second / num_frames
+        # avg_frame_rate is always in rational form (num/den)
+        num, den = (int(v) for v in stream_info['avg_frame_rate'].split('/'))
+        avg_frame_rate = 1.0 * num / den
+        bitrate_bps = file_size_bits * avg_frame_rate / num_frames
         stream_info['resolution'] = resolution_pixels_per_frame
         stream_info['filesize'] = file_size_bytes
         stream_info['bpp'] = bits_per_pixel
