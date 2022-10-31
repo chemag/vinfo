@@ -258,10 +258,14 @@ def parse_ffprobe_per_frame_info(out, debug):
             'frame_number': frame_number,
         }
         new_frame_info.update(frame_info)
+        # add derived values
         # add bits per pixel (bpp)
         new_frame_info['bpp'] = ((int(new_frame_info['pkt_size']) * 8) /
                                  (int(new_frame_info['width']) *
                                   int(new_frame_info['height'])))
+        # add bitrate (bps)
+        new_frame_info['bitrate'] = ((int(frame_info['pkt_size']) * 8) /
+                                     float(frame_info['pkt_duration_time']))
         new_frame_list.append(new_frame_info)
         frame_number += 1
     return new_frame_list
@@ -621,7 +625,7 @@ def parse_mb_information(out, debug):
                 for mb_type in MB_TYPE_LIST:
                     mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
                                                      sum(mb_dict.values()))
-                # calculate the derived values
+                # add derived values
                 for mb_type2 in MB_TYPE_SIMPLIFIED_DICT.keys():
                     mb_info[f'mb_type_{mb_type2}'] = 0
                 for mb_type2, mb_type_list in MB_TYPE_SIMPLIFIED_DICT.items():
@@ -665,7 +669,7 @@ def parse_mb_information(out, debug):
         for mb_type in MB_TYPE_LIST:
             mb_info[f'mb_type_{mb_type}'] = (mb_dict.get(mb_type, 0) /
                                              sum(mb_dict.values()))
-        # calculate the derived values
+        # add derived values
         for mb_type2 in MB_TYPE_SIMPLIFIED_DICT.keys():
             mb_info[f'mb_type_{mb_type2}'] = 0
         for mb_type2, mb_type_list in MB_TYPE_SIMPLIFIED_DICT.items():
