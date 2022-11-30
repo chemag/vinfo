@@ -52,7 +52,7 @@ def run(command, options, **kwargs):
     close_fds = kwargs.get("close_fds", default_close_fds)
     shell = type(command) in (type(""), type(""))
     if options.debug > 0:
-        print("running $ %s" % command)
+        print(f"running $ {command}")
     if options.dry_run:
         return 0, b"stdout", b"stderr"
     p = subprocess.Popen(
@@ -84,7 +84,7 @@ class InvalidCommand(Exception):
 
 def parse_file(infile, outfile, options):
     # 0. make sure file exists
-    assert os.access(infile, os.R_OK), "error: file %s does not exist" % infile
+    assert os.access(infile, os.R_OK), f"error: file {infile} does not exist"
 
     if options.func == "streams":
         # 1. get per-stream information from ffprobe
@@ -210,12 +210,9 @@ def aggregate_list_by_frame_number(in_list, field, period):
 
 # get video information
 def get_streams_information(infile, options):
-    command = "ffprobe -select_streams %s -count_frames -show_streams %s" % (
-        options.stream_id,
-        infile,
-    )
+    command = f"ffprobe -select_streams {options.stream_id} -count_frames -show_streams {infile}"
     returncode, out, err = run(command, options)
-    assert returncode == 0, 'error running "%s"' % command
+    assert returncode == 0, f'error running "{command}"'
     # parse the output
     stream_list = parse_ffprobe_output(out, "STREAM", options.debug)
     for stream_info in stream_list:
@@ -245,9 +242,9 @@ def get_streams_information(infile, options):
 
 
 def get_frames_information(infile, options):
-    command = "ffprobe -select_streams %s -show_frames %s" % (options.stream_id, infile)
+    command = f"ffprobe -select_streams {options.stream_id} -show_frames {infile}"
     returncode, out, err = run(command, options)
-    assert returncode == 0, 'error running "%s"' % command
+    assert returncode == 0, f'error running "{command}"'
     # parse the output
     return parse_ffprobe_per_frame_info(out, options.debug)
 
@@ -281,8 +278,8 @@ def parse_ffprobe_per_frame_info(out, debug):
 def parse_ffprobe_output(out, label, debug):
     item_list = []
     item_info = {}
-    start_item = "[%s]" % label
-    end_item = "[/%s]" % label
+    start_item = f"[{label}]"
+    end_item = f"[/{label}]"
     for line in out.splitlines():
         line = line.decode("ascii").strip()
         if line == start_item:
@@ -294,7 +291,7 @@ def parse_ffprobe_output(out, label, debug):
             item_info[key] = value
         else:
             if debug > 0:
-                print('warning: unknown line ("%s")' % line)
+                print(f'warning: unknown line ("{line}")')
     return item_list
 
 
@@ -411,7 +408,7 @@ def get_qp_information(infile, options):
     command = f"ffprobe -v quiet -show_frames -debug qp {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
-        raise InvalidCommand('error running "%s"' % command)
+        raise InvalidCommand(f'error running "{command}"')
     # parse the output
     return parse_qp_information(err, options.debug)
 
@@ -420,7 +417,7 @@ def get_mb_information(infile, options):
     command = f"ffprobe -v quiet -show_frames -debug mb_type {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
-        raise InvalidCommand('error running "%s"' % command)
+        raise InvalidCommand(f'error running "{command}"')
     # parse the output
     return parse_mb_information(err, options.debug)
 
@@ -429,7 +426,7 @@ def get_mv_information(infile, options):
     command = f"ffprobe -v quiet -show_frames -debug motion_vec {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
-        raise InvalidCommand('error running "%s"' % command)
+        raise InvalidCommand(f'error running "{command}"')
     # parse the output
     return parse_mv_information(err, options.debug)
 
@@ -445,7 +442,7 @@ def get_mv_distribution(infile, options):
     command = f"{options.extract_mvs_path} {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
-        raise InvalidCommand('error running "%s"' % command)
+        raise InvalidCommand(f'error running "{command}"')
     # parse the output
     return parse_mv_distribution(out, options.debug)
 
@@ -510,7 +507,7 @@ def parse_qp_information(out, debug):
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
             if not match:
-                print('warning: invalid reinit line ("%s")' % line)
+                print(f'warning: invalid reinit line ("{line}")')
                 sys.exit(-1)
             # reinit: flush all previous data
             resolution = match.group("resolution")
@@ -523,7 +520,7 @@ def parse_qp_information(out, debug):
             # [h264 @ 0x30d1a80] New frame, type: I
             match = re.search(newframe_pattern, line)
             if not match:
-                print('warning: invalid newframe line ("%s")' % line)
+                print(f'warning: invalid newframe line ("{line}")')
                 sys.exit(-1)
             # store the old frame info
             if frame_number != -1:
@@ -633,7 +630,7 @@ def parse_mb_information(out, debug):
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
             if not match:
-                print('warning: invalid reinit line ("%s")' % line)
+                print(f'warning: invalid reinit line ("{line}")')
                 sys.exit(-1)
             # reinit: flush all previous data
             resolution = match.group("resolution")
@@ -646,7 +643,7 @@ def parse_mb_information(out, debug):
             # [h264 @ 0x30d1a80] New frame, type: I
             match = re.search(newframe_pattern, line)
             if not match:
-                print('warning: invalid newframe line ("%s")' % line)
+                print(f'warning: invalid newframe line ("{line}")')
                 sys.exit(-1)
             # store the old frame info
             if frame_number != -1:
@@ -745,7 +742,7 @@ def parse_mv_information(out, debug):
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
             if not match:
-                print('warning: invalid reinit line ("%s")' % line)
+                print(f'warning: invalid reinit line ("{line}")')
                 sys.exit(-1)
             # reinit: flush all previous data
             resolution = match.group("resolution")
@@ -759,7 +756,7 @@ def parse_mv_information(out, debug):
             # [h264 @ 0x30d1a80] New frame, type: I
             match = re.search(newframe_pattern, line)
             if not match:
-                print('warning: invalid newframe line ("%s")' % line)
+                print(f'warning: invalid newframe line ("{line}")')
                 sys.exit(-1)
             # store the old frame info
             if frame_number != -1:
