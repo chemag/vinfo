@@ -895,14 +895,16 @@ def get_options(argv):
         default=default_values["add_header"],
         dest="add_header",
         const=True,
-        help="Add header to CSV output",
+        help="Add header to CSV output%s"
+        % (" [default]" if default_values["add_header"] else ""),
     )
     parser.add_argument(
         "--noadd-header",
         action="store_const",
         dest="add_header",
         const=False,
-        help="Do not add header to CSV output",
+        help="Do not add header to CSV output%s"
+        % (" [default]" if not default_values["add_header"] else ""),
     )
     parser.add_argument(
         "--add-qp",
@@ -910,14 +912,16 @@ def get_options(argv):
         default=default_values["add_qp"],
         dest="add_qp",
         const=True,
-        help="Add QP columns (min, max, mean, var)",
+        help="Add QP columns (min, max, mean, var)%s"
+        % (" [default]" if default_values["add_qp"] else ""),
     )
     parser.add_argument(
         "--noadd-qp",
         action="store_const",
         dest="add_qp",
         const=False,
-        help="Do not add QP columns (min, max, mean, var)",
+        help="Do not add QP columns (min, max, mean, var)%s"
+        % (" [default]" if not default_values["add_qp"] else ""),
     )
     parser.add_argument(
         "--add-bpp",
@@ -925,14 +929,16 @@ def get_options(argv):
         default=default_values["add_bpp"],
         dest="add_bpp",
         const=True,
-        help="Add BPP column (bits per pixel)",
+        help="Add BPP column (bits per pixel)%s"
+        % (" [default]" if default_values["add_bpp"] else ""),
     )
     parser.add_argument(
         "--noadd-bpp",
         action="store_const",
         dest="add_bpp",
         const=False,
-        help="Do not add BPP column (bits per pixel)",
+        help="Do not add BPP column (bits per pixel)%s"
+        % (" [default]" if not default_values["add_bpp"] else ""),
     )
     parser.add_argument(
         "--add-mb-type",
@@ -940,14 +946,16 @@ def get_options(argv):
         default=default_values["add_mb_type"],
         dest="add_mb_type",
         const=True,
-        help="Add MB type columns",
+        help="Add MB type columns%s"
+        % (" [default]" if default_values["add_mb_type"] else ""),
     )
     parser.add_argument(
         "--noadd-mb-type",
         action="store_const",
         dest="add_mb_type",
         const=False,
-        help="Do not add MB type columns",
+        help="Do not add MB type columns%s"
+        % (" [default]" if not default_values["add_mb_type"] else ""),
     )
     parser.add_argument(
         "--add-motion-vec",
@@ -955,14 +963,16 @@ def get_options(argv):
         default=default_values["add_motion_vec"],
         dest="add_motion_vec",
         const=True,
-        help="Add motion vector columns",
+        help="Add motion vector columns%s"
+        % (" [default]" if default_values["add_motion_vec"] else ""),
     )
     parser.add_argument(
         "--noadd-motion-vec",
         action="store_const",
         dest="add_motion_vec",
         const=False,
-        help="Do not add motion vector columns",
+        help="Do not add motion vector columns%s"
+        % (" [default]" if not default_values["add_motion_vec"] else ""),
     )
     parser.add_argument(
         "func",
