@@ -266,6 +266,9 @@ def parse_ffprobe_per_frame_info(out, debug):
         # add bitrate (bps)
         new_frame_info['bitrate'] = ((int(frame_info['pkt_size']) * 8) /
                                      float(frame_info['pkt_duration_time']))
+        # add framerate (fps)
+        new_frame_info['framerate'] = (1.0 /
+                                       float(frame_info['pkt_duration_time']))
         new_frame_list.append(new_frame_info)
         frame_number += 1
     return new_frame_list
