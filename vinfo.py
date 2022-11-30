@@ -103,7 +103,7 @@ def parse_file(infile, outfile, options):
                         key_list.append(key)
             # write the header
             if options.add_header:
-                header_format = "# %s\n" % ",".join(["%s"] * len(key_list))
+                header_format = "%s\n" % ",".join(["%s"] * len(key_list))
                 f.write(header_format % tuple(key_list))
             # write the line format
             line_format = "{" + "},{".join(key_list) + "}\n"
@@ -136,7 +136,7 @@ def parse_file(infile, outfile, options):
                         key_list.append(key)
             # write the header
             if options.add_header:
-                header_format = "# %s\n" % ",".join(["%s"] * len(key_list))
+                header_format = "%s\n" % ",".join(["%s"] * len(key_list))
                 f.write(header_format % tuple(key_list))
             # write the line format
             line_format = "{" + "},{".join(key_list) + "}\n"
@@ -156,7 +156,7 @@ def parse_file(infile, outfile, options):
             # aggregated values
             time_key_list = list(time_frame_list[0].keys())
             if options.add_header:
-                header_format = "# %s\n" % ",".join(["%s"] * len(time_key_list))
+                header_format = "%s\n" % ",".join(["%s"] * len(time_key_list))
                 f.write(header_format % tuple(time_key_list))
             line_format = ",".join(["%s"] * len(time_key_list)) + "\n"
             for time_frame_info in time_frame_list:
