@@ -909,7 +909,7 @@ def main(argv):
     # get infile/outfile
     if options.infile == '-':
         options.infile = '/dev/fd/0'
-    if options.outfile == '-':
+    if options.outfile == '-' or not options.outfile:
         options.outfile = '/dev/fd/1'
     # print results
     if options.debug > 0:
