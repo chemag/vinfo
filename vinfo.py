@@ -907,7 +907,7 @@ def main(argv):
     options = get_options(argv)
 
     # get infile/outfile
-    if options.infile == '-':
+    if options.infile == '-' or not options.infile:
         options.infile = '/dev/fd/0'
     if options.outfile == '-' or not options.outfile:
         options.outfile = '/dev/fd/1'
