@@ -35,7 +35,7 @@ default_values = {
     "add_header": True,
     "add_qp": True,
     "add_bpp": True,
-    "add_motion_vec": True,
+    "add_motion_vec": False,
     "add_mb_type": True,
     "func": "help",
     "infile": None,
