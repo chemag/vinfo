@@ -281,7 +281,11 @@ def parse_ffprobe_output(out, label, debug):
     start_item = f"[{label}]"
     end_item = f"[/{label}]"
     for line in out.splitlines():
-        line = line.decode("ascii").strip()
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            # ignore the line
+            continue
         if line == start_item:
             item_info = {}
         elif line == end_item:
@@ -469,7 +473,11 @@ def parse_mv_distribution(out, debug):
     # TODO(chemag): should we split the histograms by frame type?
     seen_header = False
     for line in out.splitlines():
-        line = line.decode("ascii").strip()
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            # ignore the line
+            continue
         if not seen_header:
             seen_header = True
             assert (
@@ -502,7 +510,11 @@ def parse_qp_information(out, debug):
     qp_pattern = r"\[[^\]]+\] (?P<qp_str>\d+)$"
 
     for line in out.splitlines():
-        line = line.decode("ascii").strip()
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            # ignore the line
+            continue
         if "Reinit context to" in line:
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
@@ -625,7 +637,11 @@ def parse_mb_information(out, debug):
     mb_pattern = r"\[[^\]]+\] (?P<mb_str>[PAiIdDgGS><X+\-|= ]+)$"
 
     for line in out.splitlines():
-        line = line.decode("ascii").strip()
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            # ignore the line
+            continue
         if "Reinit context to" in line:
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
@@ -737,7 +753,11 @@ def parse_mv_information(out, debug):
     mv_pattern = r"\[[^\]]+\] (?P<mv_str>[\d\- ]+)$"
 
     for line in out.splitlines():
-        line = line.decode("ascii").strip()
+        try:
+            line = line.decode("ascii").strip()
+        except UnicodeDecodeError:
+            # ignore the line
+            continue
         if "Reinit context to" in line:
             # [h264 @ 0x30d1a80] Reinit context to 1280x720, pix_fmt: yuv420p
             match = re.search(reinit_pattern, line)
