@@ -435,6 +435,8 @@ def get_mv_information(infile, options):
     command = f"ffprobe -v quiet -count_frames -show_frames -debug motion_vec {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
+        if b'Unable to parse option value "motion_vec"' in err:
+            print("error: need -debug motion_vec support in ffmpeg")
         raise InvalidCommand(f'error running "{command}"')
     # parse the output
     return parse_mv_information(err, options.debug)
