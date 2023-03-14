@@ -101,6 +101,8 @@ def parse_file(infile, outfile, options):
                 for key in stream_info:
                     if key not in key_list:
                         key_list.append(key)
+            # escape the key_list
+            key_list = [k.replace(":", "_") for k in key_list]
             # write the header
             if options.add_header:
                 header_format = "%s\n" % ",".join(["%s"] * len(key_list))
@@ -237,7 +239,10 @@ def get_streams_information(infile, options):
         stream_info["filesize"] = file_size_bytes
         stream_info["bpp"] = bits_per_pixel
         stream_info["bitrate_mbps"] = bitrate_bps / 1e6
-
+        # escape the keys of the stream_info dictionary
+        keys = [k.replace(":", "_") for k in stream_info.keys()]
+        vals = stream_info.values()
+        stream_info = dict(zip(keys, vals))
     return stream_list
 
 
