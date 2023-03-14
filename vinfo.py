@@ -37,6 +37,7 @@ default_values = {
     "add_bpp": True,
     "add_motion_vec": False,
     "add_mb_type": True,
+    "ffprobe": "ffprobe",
     "func": "help",
     "infile": None,
     "outfile": None,
@@ -212,7 +213,7 @@ def aggregate_list_by_frame_number(in_list, field, period):
 
 # get video information
 def get_streams_information(infile, options):
-    command = f"ffprobe -select_streams {options.stream_id} -count_frames -show_streams {infile}"
+    command = f"{options.ffprobe} -select_streams {options.stream_id} -count_frames -show_streams {infile}"
     returncode, out, err = run(command, options)
     assert returncode == 0, f'error running "{command}"'
     # parse the output
@@ -247,7 +248,7 @@ def get_streams_information(infile, options):
 
 
 def get_frames_information(infile, options):
-    command = f"ffprobe -select_streams {options.stream_id} -count_frames -show_frames {infile}"
+    command = f"{options.ffprobe} -select_streams {options.stream_id} -count_frames -show_frames {infile}"
     returncode, out, err = run(command, options)
     assert returncode == 0, f'error running "{command}"'
     # parse the output
@@ -414,7 +415,9 @@ def join_frames_and_mv(frame_list, mv_list):
 
 
 def get_qp_information(infile, options):
-    command = f"ffprobe -v quiet -count_frames -show_frames -debug qp {infile}"
+    command = (
+        f"{options.ffprobe} -v quiet -count_frames -show_frames -debug qp {infile}"
+    )
     returncode, out, err = run(command, options)
     if returncode != 0:
         raise InvalidCommand(f'error running "{command}"')
@@ -423,7 +426,9 @@ def get_qp_information(infile, options):
 
 
 def get_mb_information(infile, options):
-    command = f"ffprobe -v quiet -count_frames -show_frames -debug mb_type {infile}"
+    command = (
+        f"{options.ffprobe} -v quiet -count_frames -show_frames -debug mb_type {infile}"
+    )
     returncode, out, err = run(command, options)
     if returncode != 0:
         raise InvalidCommand(f'error running "{command}"')
@@ -432,7 +437,7 @@ def get_mb_information(infile, options):
 
 
 def get_mv_information(infile, options):
-    command = f"ffprobe -v quiet -count_frames -show_frames -debug motion_vec {infile}"
+    command = f"{options.ffprobe} -v quiet -count_frames -show_frames -debug motion_vec {infile}"
     returncode, out, err = run(command, options)
     if returncode != 0:
         if b'Unable to parse option value "motion_vec"' in err:
@@ -1000,6 +1005,15 @@ def get_options(argv):
         const=False,
         help="Do not add motion vector columns%s"
         % (" [default]" if not default_values["add_motion_vec"] else ""),
+    )
+    parser.add_argument(
+        "--ffprobe",
+        action="store",
+        type=str,
+        dest="ffprobe",
+        default=default_values["ffprobe"],
+        metavar="FFPROBE",
+        help="ffprobe binary",
     )
     parser.add_argument(
         "func",
